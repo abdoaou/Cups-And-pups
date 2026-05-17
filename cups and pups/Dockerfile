@@ -2,10 +2,10 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-COPY ["cups and pups/package.json", "cups and pups/package-lock.json", "./"]
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-COPY ["cups and pups/", "./"]
+COPY . .
 
 ENV NODE_ENV=production
 EXPOSE 3000
