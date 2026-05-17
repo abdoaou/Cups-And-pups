@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cups & Pups | Fresh Coffee. Happy Pets.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="home">
+  <header class="top-nav">
+    <nav class="desktop-nav">
+      <a href="index.html" class="nav-current">Home</a>
+      <a href="menu.html">Coffee menu</a>
+      <a href="pets.html">Pet shop</a>
+      <a href="#about">About</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <a href="index.html" class="brand" aria-label="Cups & Pups Coffee — Home">
+      <img
+        src="logo/logo.png"
+        alt="Cups & Pups Coffee"
+        class="brand-logo"
+        width="440"
+        height="140"
+        decoding="async"
+        fetchpriority="high"
+      />
+    </a>
+    <div class="header-actions">
+      <button id="loyaltyBtn" class="chip-btn">Green Loyalty</button>
+      <button id="cartBtn" class="cart-btn">🛒 <span id="cartCount">0</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section id="home" class="hero">
+      <div class="leaf leaf-1"></div>
+      <div class="leaf leaf-2"></div>
+      <div class="hero-content">
+        <p class="eyebrow">Pet Shop + Coffee Shop Lifestyle</p>
+        <h1>Fresh Coffee. Happy Pets. One Place.</h1>
+        <p class="hero-subtext">
+          A cozy, green-inspired space where people sip handcrafted coffee while pets explore healthy treats, toys, and accessories.
+        </p>
+        <div class="hero-cta">
+          <a href="menu.html" class="btn btn-primary">Explore coffee menu</a>
+          <a href="pets.html" class="btn btn-secondary">Shop pet products</a>
+        </div>
+      </div>
+      <div class="hero-split">
+        <a href="menu.html" class="split-card split-button">
+          <img src="https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=900&q=80" alt="Coffee lifestyle table with latte" />
+          <h3>Coffee lifestyle</h3>
+        </a>
+        <a href="pets.html" class="split-card split-button">
+          <img src="https://images.unsplash.com/photo-1601758228041-f3b2795255f1?auto=format&fit=crop&w=900&q=80" alt="Happy dog with owner in cafe setting" />
+          <h3>Pet-friendly moments</h3>
+        </a>
+      </div>
+    </section>
+
+    <section class="utility-bar">
+      <label class="search-wrap">
+        <span>🔍</span>
+        <input id="searchInput" type="text" placeholder="Search coffee & pet products on this page..." />
+      </label>
+    </section>
+
+    <section id="menu-preview" class="section section-preview">
+      <div class="section-head">
+        <h2>☕ Coffee menu</h2>
+        <p>A taste of our café — pulled live from our catalog.</p>
+      </div>
+      <div id="homeCoffeeGrid" class="product-grid"></div>
+      <div class="preview-actions">
+        <a href="menu.html" class="btn btn-primary">Explore More</a>
+      </div>
+    </section>
+
+    <section id="pets-preview" class="section section-alt section-preview">
+      <div class="section-head">
+        <h2>🐶 Pet shop</h2>
+        <p>Featured essentials for dogs, cats, and more.</p>
+      </div>
+      <div id="homePetsGrid" class="product-grid"></div>
+      <div class="preview-actions">
+        <a href="pets.html" class="btn btn-secondary">Explore More</a>
+      </div>
+    </section>
+
+    <section id="services" class="section services">
+      <div class="section-head">
+        <h2>✂️ Grooming services</h2>
+        <p>Book gentle, pet-friendly grooming sessions in our green care studio.</p>
+      </div>
+      <div id="servicesGrid" class="services-grid"></div>
+    </section>
+
+    <section class="section deals">
+      <div class="deal-card">
+        <h3>🌿 Green Loyalty Program</h3>
+        <p>Earn eco-points for reusable cups, sustainable pet products, and every purchase.</p>
+        <button class="btn btn-primary">Join & Earn Rewards</button>
+      </div>
+      <div class="deal-card">
+        <h3>✨ Combo Deal</h3>
+        <p>Buy any coffee and get up to 20% off selected pet products in one cart.</p>
+        <button id="comboBtn" class="btn btn-secondary">Apply Combo Discount</button>
+      </div>
+    </section>
+
+    <section id="about" class="section about">
+      <div class="section-head">
+        <h2>📍 About us</h2>
+      </div>
+      <p>
+        Cups & Pups was created as a shared, nature-inspired space where pets and people enjoy coffee together.
+        We blend organic cafe culture with pet wellness in one modern, welcoming community hub.
+      </p>
+    </section>
+
+    <section id="contact" class="section contact">
+      <div class="section-head">
+        <h2>📞 Contact</h2>
+        <p class="contact-address">
+          <strong>Visit us:</strong> WH3J+7JF, Mallah Yamine Center, Jal El Dib, Lebanon
+          <span class="contact-address-actions">
+            <a href="https://www.google.com/maps/search/?api=1&query=WH3J%2B7JF+Mallah+Yamine+Center+Jal+El+Dib" target="_blank" rel="noopener noreferrer">Open in Google Maps</a>
+          </span>
+        </p>
+      </div>
+      <div class="contact-layout">
+        <div class="map-card">
+          <iframe
+            title="Map: Mallah Yamine Center, Jal El Dib"
+            src="https://www.openstreetmap.org/export/embed.html?bbox=35.572%2C33.902%2C35.592%2C33.918&layer=mapnik"
+            loading="lazy"></iframe>
+        </div>
+        <form class="contact-form">
+          <input type="text" placeholder="Your Name" required />
+          <input type="email" placeholder="Email Address" required />
+          <textarea rows="4" placeholder="Message"></textarea>
+          <button class="btn btn-primary" type="submit">Send Message</button>
+          <div class="social-links">
+            <a href="#" aria-label="Instagram">Instagram</a>
+            <a href="#" aria-label="Facebook">Facebook</a>
+            <a href="#" aria-label="TikTok">TikTok</a>
+          </div>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <nav class="mobile-nav">
+    <a href="index.html" class="active">Home</a>
+    <a href="menu.html">Coffee</a>
+    <a href="pets.html">Pets</a>
+    <a href="#" id="mobileCartLink">Cart</a>
+    <a href="#contact">Profile</a>
+  </nav>
+
+  <aside id="cartPanel" class="cart-panel">
+    <div class="cart-head">
+      <h3>Your Cart</h3>
+      <button id="closeCart">✖</button>
+    </div>
+    <div id="cartItems" class="cart-items"></div>
+    <div class="cart-footer">
+      <p>Total: <strong id="cartTotal">$0.00</strong></p>
+    </div>
+  </aside>
+
+  <div id="productModal" class="product-modal">
+    <div class="product-modal-card">
+      <button id="closeProductModal" class="modal-close" aria-label="Close details">✖</button>
+      <img id="modalImage" src="" alt="Selected product" />
+      <h3 id="modalName"></h3>
+      <p id="modalDescription"></p>
+      <div class="stats">
+        <span id="modalLikes">❤️ 0</span>
+        <span id="modalViews">👁️ 0</span>
+      </div>
+      <div id="modalVariants" class="variant-picker" role="group" aria-label="Size"></div>
+      <p id="modalPrice" class="modal-price"></p>
+      <button id="modalAddBtn" class="btn btn-primary">Add to Cart</button>
+    </div>
+  </div>
+
+  <div id="eventPopupModal" class="event-popup-modal">
+    <div class="event-popup-card">
+      <button id="closeEventPopup" class="modal-close" aria-label="Close popup">✖</button>
+      <img id="eventPopupImage" src="" alt="Event" />
+      <h3 id="eventPopupTitle"></h3>
+      <p id="eventPopupDescription"></p>
+      <p id="eventPopupDate" class="event-popup-date"></p>
+    </div>
+  </div>
+
+  <script src="api-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

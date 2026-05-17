@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard | Cups & Pups</title>
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+  <div id="adminApp" class="admin-app">
+    <section id="loginView" class="admin-login">
+      <div class="login-card">
+        <h1>Cups &amp; Pups Admin</h1>
+        <p>Sign in to manage products, categories, and storefront content.</p>
+        <form id="loginForm">
+          <label class="field-label" for="usernameOrEmail">Username or email</label>
+          <input type="text" id="usernameOrEmail" autocomplete="username" required />
+          <label class="field-label" for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required />
+          <button type="submit">Login</button>
+        </form>
+        <p id="loginError" class="error"></p>
+      </div>
+    </section>
+
+    <section id="dashboardView" class="admin-dashboard hidden">
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <h2>Cups &amp; Pups</h2>
+          <p id="sidebarUser" class="sidebar-user"></p>
+        </div>
+        <nav>
+          <button type="button" data-tab="dashboard" class="active">Dashboard</button>
+          <button type="button" data-tab="products">Products</button>
+          <button type="button" data-tab="categories">Categories</button>
+          <button type="button" id="logoutBtn" class="btn-logout">Logout</button>
+        </nav>
+        <a class="view-store" href="/" target="_blank" rel="noopener">View storefront ↗</a>
+      </aside>
+      <main class="content">
+        <header class="content-header">
+          <div>
+            <h1 id="pageTitle">Dashboard</h1>
+            <p id="pageSubtitle" class="muted">Overview of your cafe catalog</p>
+          </div>
+          <span id="websiteBadge" class="badge"></span>
+        </header>
+        <div id="dashboardTab" class="tab-pane active"></div>
+        <div id="productsTab" class="tab-pane"></div>
+        <div id="categoriesTab" class="tab-pane"></div>
+      </main>
+    </section>
+  </div>
+
+  <div id="crudModal" class="crud-modal hidden" role="dialog" aria-modal="true">
+    <div class="crud-modal-backdrop" data-close-modal></div>
+    <div class="crud-modal-panel">
+      <header class="crud-modal-header">
+        <h2 id="crudModalTitle">Edit</h2>
+        <button type="button" class="modal-close-btn" data-close-modal aria-label="Close">✕</button>
+      </header>
+      <div id="crudModalBody" class="crud-modal-body"></div>
+      <footer class="crud-modal-footer">
+        <button type="button" class="btn-secondary" data-close-modal>Cancel</button>
+        <button type="button" id="crudModalSave" class="btn-primary">Save</button>
+      </footer>
+    </div>
+  </div>
+
+  <script src="api-config.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

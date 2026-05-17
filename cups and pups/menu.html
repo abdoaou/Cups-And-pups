@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coffee menu | Cups & Pups</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@500;600;700;800&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-page="menu">
+  <header class="top-nav">
+    <nav class="desktop-nav">
+      <a href="index.html">Home</a>
+      <a href="menu.html" class="nav-current">Coffee menu</a>
+      <a href="pets.html">Pet shop</a>
+      <a href="index.html#about">About</a>
+      <a href="index.html#contact">Contact</a>
+    </nav>
+    <a href="index.html" class="brand" aria-label="Cups & Pups Coffee — Home">
+      <img src="logo/logo.png" alt="Cups & Pups Coffee" class="brand-logo" width="440" height="140" decoding="async" />
+    </a>
+    <div class="header-actions">
+      <button id="loyaltyBtn" class="chip-btn">Green Loyalty</button>
+      <button id="cartBtn" class="cart-btn">🛒 <span id="cartCount">0</span></button>
+    </div>
+  </header>
+
+  <main>
+    <section class="page-intro section">
+      <div class="section-head">
+        <h1>☕ Coffee shop menu</h1>
+      </div>
+    </section>
+
+    <section id="coffee" class="section">
+      <div id="coffeeCategoryTabs" class="category-tabs" aria-label="Coffee categories"></div>
+      <div id="coffeeGrid" class="product-grid"></div>
+    </section>
+  </main>
+
+  <nav class="mobile-nav">
+    <a href="index.html">Home</a>
+    <a href="menu.html" class="active">Coffee</a>
+    <a href="pets.html">Pets</a>
+    <a href="#" id="mobileCartLink">Cart</a>
+    <a href="index.html#contact">Profile</a>
+  </nav>
+
+  <aside id="cartPanel" class="cart-panel">
+    <div class="cart-head">
+      <h3>Your Cart</h3>
+      <button id="closeCart">✖</button>
+    </div>
+    <div id="cartItems" class="cart-items"></div>
+    <div class="cart-footer">
+      <p>Total: <strong id="cartTotal">$0.00</strong></p>
+    </div>
+  </aside>
+
+  <div id="productModal" class="product-modal">
+    <div class="product-modal-card">
+      <button id="closeProductModal" class="modal-close" aria-label="Close details">✖</button>
+      <img id="modalImage" src="" alt="Selected product" />
+      <h3 id="modalName"></h3>
+      <p id="modalDescription"></p>
+      <div class="stats">
+        <span id="modalLikes">❤️ 0</span>
+        <span id="modalViews">👁️ 0</span>
+      </div>
+      <div id="modalVariants" class="variant-picker" role="group" aria-label="Size"></div>
+      <p id="modalPrice" class="modal-price"></p>
+      <button id="modalAddBtn" class="btn btn-primary">Add to Cart</button>
+    </div>
+  </div>
+
+  <script src="api-config.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
