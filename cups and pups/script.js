@@ -71,18 +71,50 @@ function apiField(item, ...keys) {
   return undefined;
 }
 
-function inferProductType(item) {
-  if (item.type) return item.type;
-  const parentId = Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0);
-  if (parentId === MENU_PARENT_CATEGORY_ID) return "coffee";
-  if (parentId === PETS_PARENT_CATEGORY_ID) return "pets";
+/** category id → { id, name, slug, parentId } */
+let categoryMeta = {};
+
+function rebuildCategoryIndex(items) {
+  categoryMeta = {};
+  categoryIdToName = {};
+  for (const c of items) {
+    const id = apiField(c, "id", "Id");
+    if (id == null) continue;
+    const name = String(apiField(c, "name", "Name") || "").trim();
+    const slug = String(apiField(c, "slug", "Slug") || "").trim();
+    const parentId = apiField(c, "parent_id", "parentId", "ParentCategoryId");
+    const parentNum =
+      parentId === null || parentId === undefined || parentId === "" ? null : Number(parentId);
+    categoryMeta[String(id)] = { id: String(id), name, slug, parentId: parentNum };
+    if (name) categoryIdToName[String(id)] = name;
+    if (slug) categoryIdToName[`slug:${slug}`] = name;
+  }
+}
+
+/** Menu section parent id from product.category_id → category.parent_id (e.g. Hot Coffee → 2 = Coffee). */
+function resolveMenuParentId(categoryId) {
+  const cid = String(categoryId || "").trim();
+  if (!cid) return 0;
+  const cat = categoryMeta[cid];
+  if (!cat) return 0;
+  if (cat.parentId) return cat.parentId;
+  return Number(cat.id) || 0;
+}
+
+function inferProductType(item, menuParentId = 0) {
+  const parent =
+    menuParentId ||
+    resolveMenuParentId(apiField(item, "categoryId", "CategoryId", "category_id")) ||
+    Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0);
+  if (parent === MENU_PARENT_CATEGORY_ID) return "coffee";
+  if (parent === PETS_PARENT_CATEGORY_ID) return "pets";
 
   const catId = String(apiField(item, "categoryId", "CategoryId", "category_id") || "");
   const catName = (categoryIdToName[catId] || "").toLowerCase();
   if (/(pet|dog|cat|aquarium|groom|toy|treat)/.test(catName)) return "pets";
 
   const text = `${apiField(item, "name", "Name") || ""} ${apiField(item, "description", "Description") || ""}`.toLowerCase();
-  if (/(coffee|latte|espresso|cappuccino|tea|dessert|cake|cold brew|mocha|brownie|cheesecake|milk|oat)/.test(text)) {
+  if (/(coffee|latte|espresso|cappuccino|tea|dessert|cake|cold brew|mocha|brownie|cheesecake|milk|oat|cookie)/.test(text)) {
     return "coffee";
   }
   return "pets";
@@ -91,28 +123,39 @@ function inferProductType(item) {
 function matchesWebsiteAndParent(item, typeHint = "") {
   const rowWebsiteId = Number(apiField(item, "websiteId", "WebsiteId", "website_id") || 0);
   if (WEBSITE_ID && rowWebsiteId && rowWebsiteId !== WEBSITE_ID) return false;
+  if (!typeHint) return true;
 
-  const rowParentId = Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0);
-  if (!rowParentId) return true;
-  if (typeHint === "coffee") return rowParentId === MENU_PARENT_CATEGORY_ID;
-  if (typeHint === "pets") return rowParentId === PETS_PARENT_CATEGORY_ID;
-  return rowParentId === MENU_PARENT_CATEGORY_ID || rowParentId === PETS_PARENT_CATEGORY_ID;
+  const menuParent =
+    resolveMenuParentId(apiField(item, "categoryId", "CategoryId", "category_id")) ||
+    Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0);
+  if (typeHint === "coffee") return menuParent === MENU_PARENT_CATEGORY_ID;
+  if (typeHint === "pets") return menuParent === PETS_PARENT_CATEGORY_ID;
+  return menuParent === MENU_PARENT_CATEGORY_ID || menuParent === PETS_PARENT_CATEGORY_ID;
 }
 
 function productMatchesSection(product, sectionType) {
-  if (product.type !== sectionType) return false;
-  const pid = Number(product.parentCategoryId || 0);
-  if (!pid) return true;
-  return sectionType === "coffee" ? pid === MENU_PARENT_CATEGORY_ID : pid === PETS_PARENT_CATEGORY_ID;
+  const menuParent = Number(product.menuParentId || product.parentCategoryId || 0);
+  if (menuParent) {
+    return sectionType === "coffee"
+      ? menuParent === MENU_PARENT_CATEGORY_ID
+      : menuParent === PETS_PARENT_CATEGORY_ID;
+  }
+  return product.type === sectionType;
 }
 
 function normalizeApiProduct(item) {
   const id = apiField(item, "id", "Id");
   const categoryId = apiField(item, "categoryId", "CategoryId", "category_id");
+  const catIdStr = categoryId != null ? String(categoryId) : "";
+  const meta = categoryMeta[catIdStr];
   const categoryRaw =
     apiField(item, "category", "Category", "categoryName", "CategoryName") ??
+    meta?.slug ??
     categoryId ??
     "general";
+  const menuParentId =
+    resolveMenuParentId(catIdStr) ||
+    Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0);
   const status = String(apiField(item, "status", "Status") || "active").toLowerCase();
   const soldOutRaw = apiField(item, "soldOut", "SoldOut", "sold_out");
   const stock = Number(apiField(item, "stock", "Stock") ?? 0);
@@ -120,14 +163,18 @@ function normalizeApiProduct(item) {
   const featured = apiField(item, "featured", "Featured", "IsFeatured", "is_featured");
   const basePrice = Number(priceRaw) || 0;
   const variants = normalizeVariants(item);
+  const categorySlug = String(meta?.slug || categoryRaw)
+    .toLowerCase()
+    .replace(/\s+/g, "_");
 
   return {
     id: String(id),
-    type: inferProductType(item),
-    parentCategoryId: Number(apiField(item, "parentCategoryId", "ParentCategoryId", "parent_category_id") || 0),
+    type: inferProductType(item, menuParentId),
+    menuParentId,
+    parentCategoryId: menuParentId,
     websiteId: Number(apiField(item, "websiteId", "WebsiteId", "website_id") || 0),
-    category: String(categoryRaw).toLowerCase().replace(/\s+/g, "_"),
-    categoryId: categoryId != null ? String(categoryId) : "",
+    category: categorySlug,
+    categoryId: catIdStr,
     name: apiField(item, "name", "Name") || "",
     description: apiField(item, "description", "Description", "short_description", "shortDescription") || "",
     price: basePrice,
@@ -218,9 +265,8 @@ let services = [...fallbackServices];
 let categoryIdToName = {};
 
 async function loadCategoryLookup() {
-  categoryIdToName = {};
   try {
-    const res = await fetch(apiUrl(withWebsiteId("/categories?page=1&limit=200")), { headers: authHeaders() });
+    const res = await fetch(apiUrl(withWebsiteId("/categories?page=1&limit=100")), { headers: authHeaders() });
     if (!res.ok) return;
     const data = await readApiData(res);
     const items = Array.isArray(data?.items)
@@ -230,13 +276,7 @@ async function loadCategoryLookup() {
         : Array.isArray(data)
           ? data
           : [];
-    for (const c of items) {
-      const id = apiField(c, "id", "Id");
-      const name = String(apiField(c, "name", "Name") || "").trim();
-      const slug = String(apiField(c, "slug", "Slug") || "").trim();
-      if (id != null && name) categoryIdToName[String(id)] = name;
-      if (id != null && slug) categoryIdToName[`slug:${slug}`] = name;
-    }
+    rebuildCategoryIndex(items);
   } catch (e) {
     console.warn("Category names unavailable", e);
   }
@@ -350,12 +390,6 @@ function formatPriceRange(variants) {
   return min === max ? formatPrice(min) : `${formatPrice(min)} – ${formatPrice(max)}`;
 }
 
-function formatAllSizesLine(variants) {
-  return (variants || [])
-    .map((v) => `${v.name} ${formatPrice(v.price)}`)
-    .join(" · ");
-}
-
 function ensureSelectedVariant(product) {
   const variants = product.variants || [];
   if (!variants.length) {
@@ -454,10 +488,7 @@ function updatePriceDisplay(priceEl, rangeEl, product, variant, sizeLabelEl) {
   }
 
   if (sizeLabelEl) {
-    if (multi) {
-      sizeLabelEl.textContent = formatAllSizesLine(variants);
-      sizeLabelEl.hidden = false;
-    } else if (variants.length === 1 && variants[0].name) {
+    if (variants.length === 1 && variants[0].name) {
       sizeLabelEl.textContent = variants[0].name;
       sizeLabelEl.hidden = false;
     } else {
@@ -631,14 +662,9 @@ function productCard(item, options = { wishlist: false }) {
         <span class="mini-mark">${miniMark}</span>
       </div>
       ${soldOut ? '<div class="sold-out-badge">Sold Out</div>' : ""}
-      <div class="card-sizes-block">
-        <p class="card-sizes-heading">Sizes &amp; prices</p>
-        <p class="card-sizes-line" hidden></p>
-        <div class="variant-picker card-variant-picker" role="group" aria-label="Size"></div>
-      </div>
+      <div class="variant-picker card-variant-picker" role="group" aria-label="Size"></div>
       <div class="price-row">
         <strong class="variant-price"></strong>
-        <span class="price-range-hint"></span>
       </div>
       <div class="actions">
         <button class="btn btn-primary add-btn" ${soldOut ? "disabled" : ""}>${soldOut ? "Unavailable" : "Quick Add"}</button>
@@ -650,20 +676,8 @@ function productCard(item, options = { wishlist: false }) {
 
   const picker = wrapper.querySelector(".card-variant-picker");
   const priceEl = wrapper.querySelector(".variant-price");
-  const rangeEl = wrapper.querySelector(".price-range-hint");
-  const sizesBlock = wrapper.querySelector(".card-sizes-block");
-  const sizeLabelEl = wrapper.querySelector(".card-sizes-line");
-  const sizesHeading = wrapper.querySelector(".card-sizes-heading");
-  if (productHasMultipleSizes(item)) {
-    sizesBlock?.classList.add("has-sizes");
-    if (sizesHeading) sizesHeading.hidden = false;
-  } else {
-    sizesBlock?.classList.remove("has-sizes");
-    if (sizesHeading) sizesHeading.hidden = true;
-    picker?.classList.remove("has-variants");
-  }
-  renderVariantPicker(item, picker, (v) => updatePriceDisplay(priceEl, rangeEl, item, v, sizeLabelEl));
-  updatePriceDisplay(priceEl, rangeEl, item, getSelectedVariant(item), sizeLabelEl);
+  renderVariantPicker(item, picker, (v) => updatePriceDisplay(priceEl, null, item, v, null));
+  updatePriceDisplay(priceEl, null, item, getSelectedVariant(item), null);
 
   wrapper.querySelector(".add-btn").addEventListener("click", (e) => {
     const variant = getSelectedVariant(item);

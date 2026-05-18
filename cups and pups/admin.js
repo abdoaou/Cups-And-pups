@@ -15,7 +15,11 @@ const RAILWAY_API_URL = "https://abnodejsapi-production.up.railway.app";
 const TAB_TITLES = {
   dashboard: ["Dashboard", "Overview of your cafe catalog"],
   products: ["Products", "Create, edit, and delete menu items with size variants"],
-  categories: ["Categories", "Organize products into coffee and shop sections"]
+  parentCategories: [
+    "Parent categories",
+    "Coffee menu (id 2), Pet shop (id 3) — subcategories link to these"
+  ],
+  categories: ["Subcategories", "Hot Coffee, Desserts, etc. — each must have a parent menu"]
 };
 
 function defaultApiBaseUrl() {
@@ -41,6 +45,7 @@ const el = {
   pageSubtitle: document.getElementById("pageSubtitle"),
   dashboardTab: document.getElementById("dashboardTab"),
   productsTab: document.getElementById("productsTab"),
+  parentCategoriesTab: document.getElementById("parentCategoriesTab"),
   categoriesTab: document.getElementById("categoriesTab"),
   toastHost: document.getElementById("toastHost"),
   crudModal: document.getElementById("crudModal"),
@@ -240,6 +245,19 @@ function categoryNameById(id) {
   return cat?.name || (id ? `#${id}` : "—");
 }
 
+function isParentCategory(cat) {
+  return cat.parentId === null || cat.parentId === undefined || cat.parentId === "";
+}
+
+function childCategories() {
+  return state.categories.filter((c) => c.parentId != null && c.parentId !== "");
+}
+
+function parentCategories() {
+  const idsUsedAsParent = new Set(childCategories().map((c) => Number(c.parentId)));
+  return state.categories.filter((c) => isParentCategory(c) || idsUsedAsParent.has(Number(c.id)));
+}
+
 function formatVariantSummary(product) {
   const v = product.variants || [];
   if (!v.length) return "One size (base price)";
@@ -312,13 +330,14 @@ function tabSwitching() {
       setPageHeader(tab);
       if (tab === "dashboard") await loadDashboard();
       if (tab === "products") await loadProducts();
+      if (tab === "parentCategories") await loadParentCategories();
       if (tab === "categories") await loadCategories();
     });
   });
 }
 
 async function loadCategoriesData() {
-  const data = await api(withWebsiteQuery("/categories?limit=200&page=1"));
+  const data = await api(withWebsiteQuery("/categories?limit=100&page=1"));
   state.categories = listItems(data).map(normalizeCategory);
   return state.categories;
 }
@@ -440,8 +459,11 @@ function productFormHtml(product = null) {
   const p = product || {};
   const hasMultiple = (p.variants?.length || 0) > 0 || p.hasVariants;
   const variants = p.variants || [];
-  const categoryOptions = state.categories
-    .map((c) => `<option value="${c.id}" ${String(c.id) === String(p.categoryId) ? "selected" : ""}>${escapeHtml(c.name)}</option>`)
+  const categoryOptions = childCategories()
+    .map((c) => {
+      const parentLabel = categoryNameById(c.parentId);
+      return `<option value="${c.id}" ${String(c.id) === String(p.categoryId) ? "selected" : ""}>${escapeHtml(c.name)} (${escapeHtml(parentLabel)})</option>`;
+    })
     .join("");
 
   return `
@@ -705,26 +727,17 @@ async function loadProducts() {
   });
 }
 
-function categoryFormHtml(category = null) {
+function parentCategoryFormHtml(category = null) {
   const c = category || {};
-  const parentOptions = state.categories
-    .filter((x) => !category || String(x.id) !== String(category.id))
-    .map(
-      (p) =>
-        `<option value="${p.id}" ${String(p.id) === String(c.parentId ?? "") ? "selected" : ""}>${escapeHtml(p.name)}</option>`
-    )
-    .join("");
-
   return `
     <div class="form-grid">
+      <p class="muted">Top-level menus (Coffee id 2, Pet shop id 3). Subcategories link to these.</p>
       <label class="field-label">Name</label>
       <input id="cName" value="${escapeHtml(c.name || "")}" required />
       <label class="field-label">Slug</label>
-      <input id="cSlug" value="${escapeHtml(c.slug || "")}" placeholder="hot-coffee" />
+      <input id="cSlug" value="${escapeHtml(c.slug || "")}" placeholder="coffee-menu" />
       <label class="field-label">Description</label>
       <textarea id="cDesc" rows="2">${escapeHtml(c.description || "")}</textarea>
-      <label class="field-label">Parent category</label>
-      <select id="cParent"><option value="">None</option>${parentOptions}</select>
       <label class="field-label">Image URL</label>
       <input id="cImage" value="${escapeHtml(c.image || "")}" />
       <label class="field-label">Status</label>
@@ -735,26 +748,144 @@ function categoryFormHtml(category = null) {
     </div>`;
 }
 
-function openCategoryModal(category = null) {
-  openModal(category ? "Edit category" : "New category", categoryFormHtml(category), async () => {
-    const name = document.getElementById("cName").value.trim();
-    if (!name) throw new Error("Category name is required");
-    const payload = {
-      name,
-      slug: document.getElementById("cSlug").value.trim() || name.toLowerCase().replace(/\s+/g, "-"),
-      description: document.getElementById("cDesc").value.trim(),
-      parent_id: Number(document.getElementById("cParent").value || 0) || null,
-      image: document.getElementById("cImage").value.trim() || undefined,
-      status: document.getElementById("cStatus").value
-    };
+function categoryFormHtml(category = null) {
+  const c = category || {};
+  const parentOptions = parentCategories()
+    .map(
+      (p) =>
+        `<option value="${p.id}" ${String(p.id) === String(c.parentId ?? "") ? "selected" : ""}>${escapeHtml(p.name)} (#${p.id})</option>`
+    )
+    .join("");
+
+  return `
+    <div class="form-grid">
+      <p class="muted">Subcategories (e.g. Hot Coffee). Set parent to Coffee (2) for the coffee menu.</p>
+      <label class="field-label">Name</label>
+      <input id="cName" value="${escapeHtml(c.name || "")}" required />
+      <label class="field-label">Slug</label>
+      <input id="cSlug" value="${escapeHtml(c.slug || "")}" placeholder="hot-coffee" />
+      <label class="field-label">Description</label>
+      <textarea id="cDesc" rows="2">${escapeHtml(c.description || "")}</textarea>
+      <label class="field-label">Parent menu</label>
+      <select id="cParent" required><option value="">— Select parent —</option>${parentOptions}</select>
+      <label class="field-label">Image URL</label>
+      <input id="cImage" value="${escapeHtml(c.image || "")}" />
+      <label class="field-label">Status</label>
+      <select id="cStatus">
+        <option value="active" ${c.status === "active" ? "selected" : ""}>active</option>
+        <option value="inactive" ${c.status === "inactive" ? "selected" : ""}>inactive</option>
+      </select>
+    </div>`;
+}
+
+function buildCategoryPayload(parentIdRequired) {
+  const name = document.getElementById("cName").value.trim();
+  if (!name) throw new Error("Category name is required");
+  const parentVal = document.getElementById("cParent")?.value;
+  const parent_id =
+    parentIdRequired === false
+      ? null
+      : Number(parentVal || 0) || null;
+  if (parentIdRequired && !parent_id) {
+    throw new Error("Select a parent menu (Coffee or Pet shop).");
+  }
+  return {
+    name,
+    slug: document.getElementById("cSlug").value.trim() || name.toLowerCase().replace(/\s+/g, "-"),
+    description: document.getElementById("cDesc").value.trim(),
+    parent_id,
+    image: document.getElementById("cImage").value.trim() || undefined,
+    status: document.getElementById("cStatus").value
+  };
+}
+
+function openParentCategoryModal(category = null) {
+  openModal(category ? "Edit parent category" : "New parent category", parentCategoryFormHtml(category), async () => {
+    const payload = buildCategoryPayload(false);
     if (category?.id) {
       await api(`/categories/${category.id}`, { method: "PUT", body: JSON.stringify(payload) });
-      showToast("Category updated", "success");
+      showToast("Parent category updated", "success");
     } else {
       await api("/categories", { method: "POST", body: JSON.stringify(payload) });
-      showToast("Category created", "success");
+      showToast("Parent category created", "success");
     }
-    await Promise.all([loadCategories(), loadDashboard()]);
+    await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
+  });
+}
+
+function openCategoryModal(category = null) {
+  openModal(category ? "Edit subcategory" : "New subcategory", categoryFormHtml(category), async () => {
+    const payload = buildCategoryPayload(true);
+    if (category?.id) {
+      await api(`/categories/${category.id}`, { method: "PUT", body: JSON.stringify(payload) });
+      showToast("Subcategory updated", "success");
+    } else {
+      await api("/categories", { method: "POST", body: JSON.stringify(payload) });
+      showToast("Subcategory created", "success");
+    }
+    await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
+  });
+}
+
+async function loadParentCategories() {
+  await loadCategoriesData().catch(() => {});
+  const parents = parentCategories();
+  el.parentCategoriesTab.innerHTML = `
+    <div class="toolbar">
+      <p class="muted toolbar-hint">Parent id <strong>2</strong> = Coffee menu · <strong>3</strong> = Pet shop</p>
+      <button type="button" id="newParentCategoryBtn" class="btn-primary">+ New parent category</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${parents.length
+            ? parents
+                .map(
+                  (c) => `
+            <tr>
+              <td><strong>#${c.id}</strong></td>
+              <td>${escapeHtml(c.name)}</td>
+              <td>${escapeHtml(c.slug)}</td>
+              <td><span class="pill pill-${escapeHtml(c.status)}">${escapeHtml(c.status)}</span></td>
+              <td class="row-actions">
+                <button type="button" class="btn-secondary btn-sm" data-edit-parent-category="${c.id}">Edit</button>
+                <button type="button" class="btn-danger btn-sm" data-delete-parent-category="${c.id}">Delete</button>
+              </td>
+            </tr>`
+                )
+                .join("")
+            : `<tr><td colspan="5" class="empty-cell">No parent categories. Add Coffee (menu id 2) and Pet shop (id 3).</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+
+  document.getElementById("newParentCategoryBtn")?.addEventListener("click", () => openParentCategoryModal());
+  document.querySelectorAll("[data-edit-parent-category]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cat = state.categories.find((c) => String(c.id) === btn.dataset.editParentCategory);
+      openParentCategoryModal(cat);
+    });
+  });
+  document.querySelectorAll("[data-delete-parent-category]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Delete this parent category? Subcategories may break.")) return;
+      try {
+        await api(`/categories/${btn.dataset.deleteParentCategory}`, { method: "DELETE" });
+        showToast("Parent category deleted", "success");
+        await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    });
   });
 }
 
@@ -762,8 +893,8 @@ async function loadCategories() {
   await loadCategoriesData();
   el.categoriesTab.innerHTML = `
     <div class="toolbar">
-      <p class="muted toolbar-hint">Categories group your menu (Hot Coffee, Desserts, etc.)</p>
-      <button type="button" id="newCategoryBtn" class="btn-primary">+ New category</button>
+      <p class="muted toolbar-hint">Subcategories under a parent (e.g. Hot Coffee → parent Coffee #2)</p>
+      <button type="button" id="newCategoryBtn" class="btn-primary">+ New subcategory</button>
     </div>
     <div class="table-wrap">
       <table>
@@ -778,14 +909,14 @@ async function loadCategories() {
           </tr>
         </thead>
         <tbody>
-          ${state.categories.length
-            ? state.categories
+          ${childCategories().length
+            ? childCategories()
                 .map(
                   (c) => `
             <tr>
               <td><strong>${escapeHtml(c.name)}</strong></td>
               <td>${escapeHtml(c.slug)}</td>
-              <td>${escapeHtml(categoryNameById(c.parentId) === "—" ? "—" : categoryNameById(c.parentId))}</td>
+              <td>${escapeHtml(categoryNameById(c.parentId))} (#${escapeHtml(c.parentId)})</td>
               <td><span class="pill pill-${escapeHtml(c.status)}">${escapeHtml(c.status)}</span></td>
               <td>${fmtDate(c.raw?.updated_at)}</td>
               <td class="row-actions">
@@ -795,7 +926,7 @@ async function loadCategories() {
             </tr>`
                 )
                 .join("")
-            : `<tr><td colspan="6" class="empty-cell">No categories yet.</td></tr>`}
+            : `<tr><td colspan="6" class="empty-cell">No subcategories yet.</td></tr>`}
         </tbody>
       </table>
     </div>`;
@@ -813,7 +944,7 @@ async function loadCategories() {
       try {
         await api(`/categories/${btn.dataset.deleteCategory}`, { method: "DELETE" });
         showToast("Category deleted", "success");
-        await Promise.all([loadCategories(), loadDashboard()]);
+        await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
       } catch (err) {
         showToast(err.message, "error");
       }
@@ -866,6 +997,7 @@ async function enterDashboard() {
   setPageHeader("dashboard");
   await loadDashboard();
   await loadProducts();
+  await loadParentCategories();
   await loadCategories();
 }
 
