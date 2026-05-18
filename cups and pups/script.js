@@ -291,23 +291,32 @@ function variantSortKey(name) {
 }
 
 function normalizeVariant(v) {
+  if (window.ProductVariants) return window.ProductVariants.normalizeVariantFromRow(v);
   const name = String(apiField(v, "name", "Name") || "").trim();
   if (!name) return null;
   const stock = Number(apiField(v, "stock", "Stock") ?? 0);
-  const price = Number(apiField(v, "price", "Price") || 0);
+  const price = Number(apiField(v, "sale_price", "salePrice", "price", "Price") || 0);
   return {
     id: String(apiField(v, "id", "Id") ?? name.toLowerCase().replace(/\s+/g, "-")),
     name,
     price,
     stock,
     sku: apiField(v, "sku", "Sku", "SKU") || "",
+    variables: {},
     soldOut: stock <= 0
   };
 }
 
-/** Only real API variants — never invent Small/Medium/Large. */
+/** Embedded variants on product JSON, or rows from product_variants (merged later). */
 function normalizeVariants(item) {
-  const raw = apiField(item, "variants", "Variants", "product_variants", "productVariants");
+  const raw = apiField(
+    item,
+    "variants",
+    "Variants",
+    "product_variants",
+    "productVariants",
+    "product_varients"
+  );
   if (!Array.isArray(raw) || !raw.length) return [];
   return raw
     .map((v) => normalizeVariant(v))
@@ -407,7 +416,9 @@ function renderVariantPicker(product, container, onSelect) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `variant-btn${String(v.id) === String(selected?.id) ? " active" : ""}${v.soldOut ? " disabled" : ""}`;
-    btn.textContent = v.name;
+    btn.textContent = window.ProductVariants
+      ? window.ProductVariants.formatVariantLabel(v, formatPrice)
+      : `${v.name} — ${formatPrice(v.price)}`;
     btn.disabled = v.soldOut;
     btn.dataset.variantId = v.id;
     btn.addEventListener("click", () => {
@@ -929,6 +940,18 @@ async function loadCatalogFromDatabase() {
       .filter((item) => matchesWebsiteAndParent(item))
       .map(normalizeApiProduct)
       .filter((p) => p.status !== "inactive" && p.status !== "draft");
+
+    if (window.ProductVariants) {
+      const variantMap = await window.ProductVariants.fetchProductVariantsMap(async (path) => {
+        const res = await fetch(apiUrl(withWebsiteId(path)), { headers: authHeaders() });
+        if (!res.ok) {
+          const errBody = await res.json().catch(() => ({}));
+          throw new Error(errBody.message || `Variants HTTP ${res.status}`);
+        }
+        return readApiData(res);
+      });
+      products = products.map((p) => window.ProductVariants.mergeIntoProduct(p, variantMap));
+    }
 
     if (page === "home") {
       const featured = products.filter((p) => p.featured);

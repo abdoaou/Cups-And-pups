@@ -161,19 +161,22 @@ function normalizeCategory(row) {
 }
 
 function normalizeVariantRow(v) {
+  if (window.ProductVariants) return window.ProductVariants.normalizeVariantFromRow(v);
   const name = String(field(v, "name", "Name") || "").trim();
   if (!name) return null;
   return {
     id: field(v, "id", "Id"),
     name,
-    price: Number(field(v, "price", "Price") || 0),
+    price: Number(field(v, "sale_price", "salePrice", "price", "Price") || 0),
     stock: Number(field(v, "stock", "Stock") ?? 0),
-    sku: field(v, "sku", "Sku", "SKU") || ""
+    sku: field(v, "sku", "Sku", "SKU") || "",
+    variables: {}
   };
 }
 
 function normalizeProduct(row) {
-  const variantsRaw = field(row, "variants", "Variants") || [];
+  const variantsRaw =
+    field(row, "variants", "Variants", "product_variants", "productVariants", "product_varients") || [];
   const variants = Array.isArray(variantsRaw)
     ? variantsRaw.map((v) => normalizeVariantRow(v)).filter(Boolean)
     : [];
@@ -202,8 +205,26 @@ function categoryNameById(id) {
 function formatVariantSummary(product) {
   const v = product.variants || [];
   if (!v.length) return "One size (base price)";
-  if (v.length === 1) return v[0].name || "One size";
-  return v.map((x) => `${x.name} ${fmtMoney(x.price)}`).join(" · ");
+  if (v.length === 1) {
+    const vars = v[0].variables || {};
+    const extra = Object.keys(vars).length
+      ? ` (${Object.entries(vars)
+          .map(([k, val]) => `${k}: ${val}`)
+          .join(", ")})`
+      : "";
+    return `${v[0].name}${extra} ${fmtMoney(v[0].price)}`;
+  }
+  return v
+    .map((x) => {
+      const vars = x.variables || {};
+      const extra = Object.keys(vars).length
+        ? ` (${Object.entries(vars)
+            .map(([k, val]) => `${k}: ${val}`)
+            .join(", ")})`
+        : "";
+      return `${x.name}${extra} ${fmtMoney(x.price)}`;
+    })
+    .join(" · ");
 }
 
 function openModal(title, bodyHtml, onSave) {
@@ -379,7 +400,7 @@ function readVariantsFromForm() {
 
 function productFormHtml(product = null) {
   const p = product || {};
-  const hasMultiple = p.hasVariants || (p.variants?.length || 0) > 1;
+  const hasMultiple = (p.variants?.length || 0) > 0 || p.hasVariants;
   const variants = p.variants || [];
   const categoryOptions = state.categories
     .map((c) => `<option value="${c.id}" ${String(c.id) === String(p.categoryId) ? "selected" : ""}>${escapeHtml(c.name)}</option>`)
@@ -473,15 +494,30 @@ function buildProductPayload() {
 
 function openProductModal(product = null) {
   openModal(product ? "Edit product" : "New product", productFormHtml(product), async () => {
+    const hasMultiple = document.getElementById("fHasSizes")?.checked;
+    const formVariants = hasMultiple ? readVariantsFromForm() : [];
     const payload = buildProductPayload();
     if (!payload.name) throw new Error("Product name is required");
-    if (product?.id) {
-      await api(`/products/${product.id}`, { method: "PUT", body: JSON.stringify(payload) });
+    delete payload.variants;
+
+    let productId = product?.id;
+    if (productId) {
+      await api(`/products/${productId}`, { method: "PUT", body: JSON.stringify(payload) });
       showToast("Product updated", "success");
     } else {
-      await api("/products", { method: "POST", body: JSON.stringify(payload) });
+      const created = await api("/products", { method: "POST", body: JSON.stringify(payload) });
+      productId = field(created, "id", "Id");
       showToast("Product created", "success");
     }
+
+    if (window.ProductVariants && productId) {
+      await window.ProductVariants.syncProductVariants(
+        (path, opts) => api(withWebsiteQuery(path), opts),
+        productId,
+        formVariants
+      );
+    }
+
     await Promise.all([loadProducts(), loadDashboard()]);
   });
   bindProductFormControls();
@@ -497,7 +533,16 @@ async function loadProducts() {
   if (state.productStatus) query.set("status", state.productStatus);
 
   const data = await api(withWebsiteQuery(`/products?${query}`));
-  state.products = listItems(data).map(normalizeProduct);
+  let products = listItems(data).map(normalizeProduct);
+
+  if (window.ProductVariants) {
+    const variantMap = await window.ProductVariants.fetchProductVariantsMap((path) =>
+      api(withWebsiteQuery(path))
+    );
+    products = products.map((p) => window.ProductVariants.mergeIntoProduct(p, variantMap));
+  }
+
+  state.products = products;
   const meta = listMeta(data);
   state.productTotal = Number(meta.total ?? state.products.length);
   const totalPages = Math.max(1, Number(meta.totalPages) || Math.ceil(state.productTotal / state.productPageSize));
@@ -583,7 +628,15 @@ async function loadProducts() {
       const local = state.products.find((p) => String(p.id) === btn.dataset.editProduct);
       try {
         const detail = await api(`/products/${btn.dataset.editProduct}`);
-        openProductModal(normalizeProduct(detail || local));
+        let merged = normalizeProduct(detail || local);
+        if (window.ProductVariants) {
+          const variantMap = await window.ProductVariants.fetchProductVariantsMap(
+            (path) => api(withWebsiteQuery(path)),
+            { productId: btn.dataset.editProduct }
+          );
+          merged = window.ProductVariants.mergeIntoProduct(merged, variantMap);
+        }
+        openProductModal(merged);
       } catch {
         openProductModal(local);
       }
