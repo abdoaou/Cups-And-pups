@@ -511,11 +511,20 @@ function openProductModal(product = null) {
     }
 
     if (window.ProductVariants && productId) {
-      await window.ProductVariants.syncProductVariants(
-        (path, opts) => api(withWebsiteQuery(path), opts),
-        productId,
-        formVariants
-      );
+      try {
+        await window.ProductVariants.syncProductVariants(
+          (path, opts) => api(withWebsiteQuery(path), opts),
+          productId,
+          formVariants
+        );
+        if (formVariants.length) {
+          showToast(`${formVariants.length} size(s) saved to product_variants`, "success");
+        }
+      } catch (syncErr) {
+        throw new Error(
+          `Product saved but sizes failed: ${syncErr.message}. Log in to admin and try again.`
+        );
+      }
     }
 
     await Promise.all([loadProducts(), loadDashboard()]);

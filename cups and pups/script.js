@@ -343,11 +343,17 @@ function defaultVariantForProduct(product) {
 
 function formatPriceRange(variants) {
   if (!variants?.length) return formatPrice(0);
-  const prices = variants.map((v) => v.price).filter((p) => p > 0);
+  const prices = variants.map((v) => Number(v.price) || 0).filter((p) => p > 0);
   if (!prices.length) return formatPrice(0);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   return min === max ? formatPrice(min) : `${formatPrice(min)} – ${formatPrice(max)}`;
+}
+
+function formatAllSizesLine(variants) {
+  return (variants || [])
+    .map((v) => `${v.name} ${formatPrice(v.price)}`)
+    .join(" · ");
 }
 
 function ensureSelectedVariant(product) {
@@ -416,9 +422,8 @@ function renderVariantPicker(product, container, onSelect) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `variant-btn${String(v.id) === String(selected?.id) ? " active" : ""}${v.soldOut ? " disabled" : ""}`;
-    btn.textContent = window.ProductVariants
-      ? window.ProductVariants.formatVariantLabel(v, formatPrice)
-      : `${v.name} — ${formatPrice(v.price)}`;
+    btn.textContent = v.name;
+    btn.title = `${v.name} — ${formatPrice(v.price)}`;
     btn.disabled = v.soldOut;
     btn.dataset.variantId = v.id;
     btn.addEventListener("click", () => {
@@ -435,15 +440,24 @@ function renderVariantPicker(product, container, onSelect) {
 function updatePriceDisplay(priceEl, rangeEl, product, variant, sizeLabelEl) {
   const v = variant || getSelectedVariant(product);
   const variants = product.variants || [];
-  const price = v?.price ?? product.price;
+  const price = Number(v?.price ?? product.price) || 0;
+  const multi = productHasMultipleSizes(product);
 
   if (priceEl) {
-    const showNameInline = !sizeLabelEl && variants.length === 1 && variants[0].name;
-    priceEl.textContent = showNameInline ? `${variants[0].name} — ${formatPrice(price)}` : formatPrice(price);
+    if (multi && v?.name) {
+      priceEl.textContent = `${v.name}: ${formatPrice(price)}`;
+    } else if (variants.length === 1 && variants[0].name) {
+      priceEl.textContent = `${variants[0].name}: ${formatPrice(price)}`;
+    } else {
+      priceEl.textContent = formatPrice(price);
+    }
   }
 
   if (sizeLabelEl) {
-    if (variants.length === 1 && variants[0].name) {
+    if (multi) {
+      sizeLabelEl.textContent = formatAllSizesLine(variants);
+      sizeLabelEl.hidden = false;
+    } else if (variants.length === 1 && variants[0].name) {
       sizeLabelEl.textContent = variants[0].name;
       sizeLabelEl.hidden = false;
     } else {
@@ -453,9 +467,8 @@ function updatePriceDisplay(priceEl, rangeEl, product, variant, sizeLabelEl) {
   }
 
   if (rangeEl) {
-    const showRange = productHasMultipleSizes(product);
-    rangeEl.textContent = showRange ? formatPriceRange(variants) : "";
-    rangeEl.hidden = !showRange;
+    rangeEl.textContent = multi ? `From ${formatPriceRange(variants)}` : "";
+    rangeEl.hidden = !multi;
   }
 }
 
@@ -618,8 +631,11 @@ function productCard(item, options = { wishlist: false }) {
         <span class="mini-mark">${miniMark}</span>
       </div>
       ${soldOut ? '<div class="sold-out-badge">Sold Out</div>' : ""}
-      <div class="variant-picker card-variant-picker" role="group" aria-label="Size"></div>
-      <p class="single-size-label" hidden></p>
+      <div class="card-sizes-block">
+        <p class="card-sizes-heading">Sizes &amp; prices</p>
+        <p class="card-sizes-line" hidden></p>
+        <div class="variant-picker card-variant-picker" role="group" aria-label="Size"></div>
+      </div>
       <div class="price-row">
         <strong class="variant-price"></strong>
         <span class="price-range-hint"></span>
@@ -635,7 +651,17 @@ function productCard(item, options = { wishlist: false }) {
   const picker = wrapper.querySelector(".card-variant-picker");
   const priceEl = wrapper.querySelector(".variant-price");
   const rangeEl = wrapper.querySelector(".price-range-hint");
-  const sizeLabelEl = wrapper.querySelector(".single-size-label");
+  const sizesBlock = wrapper.querySelector(".card-sizes-block");
+  const sizeLabelEl = wrapper.querySelector(".card-sizes-line");
+  const sizesHeading = wrapper.querySelector(".card-sizes-heading");
+  if (productHasMultipleSizes(item)) {
+    sizesBlock?.classList.add("has-sizes");
+    if (sizesHeading) sizesHeading.hidden = false;
+  } else {
+    sizesBlock?.classList.remove("has-sizes");
+    if (sizesHeading) sizesHeading.hidden = true;
+    picker?.classList.remove("has-variants");
+  }
   renderVariantPicker(item, picker, (v) => updatePriceDisplay(priceEl, rangeEl, item, v, sizeLabelEl));
   updatePriceDisplay(priceEl, rangeEl, item, getSelectedVariant(item), sizeLabelEl);
 
@@ -926,7 +952,7 @@ function highlightMobileNav() {
 async function loadCatalogFromDatabase() {
   try {
     await loadCategoryLookup();
-    const response = await fetch(apiUrl(withWebsiteId("/products?page=1&limit=100")), { headers: authHeaders() });
+    const response = await fetch(apiUrl(withWebsiteId("/products?page=1&limit=200")), { headers: authHeaders() });
     if (!response.ok) throw new Error(`Unable to fetch catalog (HTTP ${response.status}).`);
     const dataRaw = await readApiData(response);
     const productsSource = Array.isArray(dataRaw?.products)
@@ -942,14 +968,17 @@ async function loadCatalogFromDatabase() {
       .filter((p) => p.status !== "inactive" && p.status !== "draft");
 
     if (window.ProductVariants) {
-      const variantMap = await window.ProductVariants.fetchProductVariantsMap(async (path) => {
-        const res = await fetch(apiUrl(withWebsiteId(path)), { headers: authHeaders() });
-        if (!res.ok) {
-          const errBody = await res.json().catch(() => ({}));
-          throw new Error(errBody.message || `Variants HTTP ${res.status}`);
-        }
-        return readApiData(res);
-      });
+      const variantMap = await window.ProductVariants.fetchProductVariantsMap(
+        async (path) => {
+          const res = await fetch(apiUrl(withWebsiteId(path)), { headers: authHeaders() });
+          if (!res.ok) {
+            const errBody = await res.json().catch(() => ({}));
+            throw new Error(errBody.message || `Variants HTTP ${res.status}`);
+          }
+          return readApiData(res);
+        },
+        { limit: 500 }
+      );
       products = products.map((p) => window.ProductVariants.mergeIntoProduct(p, variantMap));
     }
 
