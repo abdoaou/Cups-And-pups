@@ -439,6 +439,7 @@ function variantRowsHtml(variants) {
       <input class="v-price" type="number" step="0.01" placeholder="Price" value="${Number(v.price) || 0}" />
       <input class="v-stock" type="number" placeholder="Stock" value="${Number(v.stock) || 0}" />
       <input class="v-sku" placeholder="SKU" value="${escapeHtml(v.sku || "")}" />
+      <button type="button" class="btn-danger btn-sm variant-row-remove" title="Remove this size" aria-label="Remove size">✕</button>
     </div>`
     )
     .join("");
@@ -513,6 +514,13 @@ function bindProductFormControls() {
 }
 
 function bindVariantRowControls() {
+  const host = document.getElementById("variantRows");
+  host?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".variant-row-remove");
+    if (!btn || !host.contains(btn)) return;
+    btn.closest(".variant-row")?.remove();
+  });
+
   document.getElementById("addVariantRow")?.addEventListener("click", () => {
     const host = document.getElementById("variantRows");
     const i = host.querySelectorAll(".variant-row").length;
@@ -523,7 +531,8 @@ function bindVariantRowControls() {
       <input class="v-name" placeholder="Size name e.g. Small" value="" />
       <input class="v-price" type="number" step="0.01" placeholder="Price" value="0" />
       <input class="v-stock" type="number" placeholder="Stock" value="50" />
-      <input class="v-sku" placeholder="SKU" value="" />`;
+      <input class="v-sku" placeholder="SKU" value="" />
+      <button type="button" class="btn-danger btn-sm variant-row-remove" title="Remove this size" aria-label="Remove size">✕</button>`;
     host.appendChild(wrap);
   });
 }

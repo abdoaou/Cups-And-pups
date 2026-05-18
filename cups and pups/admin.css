@@ -258,13 +258,20 @@ tr:last-child td { border-bottom: none; }
 
 .variant-row {
   display: grid;
-  grid-template-columns: 1fr 0.8fr 0.7fr 1fr;
+  grid-template-columns: 1fr 0.8fr 0.7fr 1fr auto;
   gap: 0.4rem;
   margin-bottom: 0.4rem;
+  align-items: center;
+}
+
+.variant-row-remove {
+  min-width: 2rem;
+  padding: 0.25rem 0.5rem;
 }
 
 @media (max-width: 640px) {
-  .variant-row { grid-template-columns: 1fr 1fr; }
+  .variant-row { grid-template-columns: 1fr 1fr auto; }
+  .variant-row .v-sku { grid-column: 1 / -2; }
 }
 
 /* Modal */

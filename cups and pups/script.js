@@ -667,7 +667,7 @@ function productCard(item, options = { wishlist: false }) {
         <strong class="variant-price"></strong>
       </div>
       <div class="actions">
-        <button class="btn btn-primary add-btn" ${soldOut ? "disabled" : ""}>${soldOut ? "Unavailable" : "Quick Add"}</button>
+        <button class="btn btn-primary add-btn" ${soldOut ? "disabled" : ""}>${soldOut ? "Unavailable" : page === "menu" ? "Add" : "Quick Add"}</button>
         ${options.wishlist ? `<button class="icon-btn wish-btn">❤️ ${item.likes}</button>` : ""}
         <button class="icon-btn detail-btn">Details</button>
       </div>
