@@ -952,7 +952,7 @@ function highlightMobileNav() {
 async function loadCatalogFromDatabase() {
   try {
     await loadCategoryLookup();
-    const response = await fetch(apiUrl(withWebsiteId("/products?page=1&limit=200")), { headers: authHeaders() });
+    const response = await fetch(apiUrl(withWebsiteId("/products?page=1&limit=100")), { headers: authHeaders() });
     if (!response.ok) throw new Error(`Unable to fetch catalog (HTTP ${response.status}).`);
     const dataRaw = await readApiData(response);
     const productsSource = Array.isArray(dataRaw?.products)
