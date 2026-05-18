@@ -121,7 +121,40 @@ function showToast(message, type = "info") {
   setTimeout(() => node.remove(), 4200);
 }
 
+function syncTokenFromStorage() {
+  state.token = localStorage.getItem("admin_token") || state.token || "";
+}
+
+function extractTokenFromResponse(raw) {
+  if (!raw || typeof raw !== "object") return "";
+  return raw.accessToken || raw.token || raw.data?.accessToken || raw.data?.token || "";
+}
+
+function extractAdminFromResponse(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  return raw.admin || raw.user || raw.data?.admin || raw.data?.user || null;
+}
+
+function clearSession(message = "") {
+  state.token = "";
+  state.currentUser = null;
+  localStorage.removeItem("admin_token");
+  localStorage.removeItem("admin_user");
+  localStorage.removeItem("admin_website_id");
+  el.dashboardView?.classList.add("hidden");
+  el.loginView?.classList.remove("hidden");
+  if (message) el.loginError.textContent = message;
+}
+
+function requireAuth() {
+  syncTokenFromStorage();
+  if (!state.token) {
+    throw new Error("You must be logged in to save product sizes.");
+  }
+}
+
 async function api(path, options = {}) {
+  syncTokenFromStorage();
   const headers = { ...(options.headers || {}) };
   if (!(options.body instanceof FormData)) headers["Content-Type"] = "application/json";
   if (state.token) headers.Authorization = `Bearer ${state.token}`;
@@ -133,6 +166,11 @@ async function api(path, options = {}) {
   let raw = null;
   if (contentType.includes("application/json")) {
     raw = await response.json();
+  }
+
+  if (response.status === 401) {
+    clearSession("Session expired. Please log in again.");
+    throw new Error("Unauthorized — please log in again.");
   }
 
   if (!response.ok) {
@@ -499,6 +537,7 @@ function openProductModal(product = null) {
     const payload = buildProductPayload();
     if (!payload.name) throw new Error("Product name is required");
     delete payload.variants;
+    requireAuth();
 
     let productId = product?.id;
     if (productId) {
@@ -512,6 +551,7 @@ function openProductModal(product = null) {
 
     if (window.ProductVariants && productId) {
       try {
+        requireAuth();
         await window.ProductVariants.syncProductVariants(
           (path, opts) => api(withWebsiteQuery(path), opts),
           productId,
@@ -782,26 +822,33 @@ async function loadCategories() {
 }
 
 async function login(usernameOrEmail, password) {
-  const result = await api("/auth/login", {
+  const response = await fetch(apiUrl("/auth/login"), {
     method: "POST",
-    body: JSON.stringify({ username: usernameOrEmail, usernameOrEmail, password })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: usernameOrEmail,
+      usernameOrEmail,
+      email: usernameOrEmail,
+      password
+    })
   });
-  state.token = result.accessToken || result.token || "";
+  const raw = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(raw.message || raw.error || "Login failed");
+  }
+  state.token = extractTokenFromResponse(raw);
   if (!state.token) throw new Error("Login response missing access token");
-  state.currentUser = result.user || null;
+  state.currentUser = extractAdminFromResponse(raw);
   localStorage.setItem("admin_user", JSON.stringify(state.currentUser || null));
   localStorage.setItem("admin_token", state.token);
   const wid = state.currentUser?.websiteId ?? state.currentUser?.website_id;
   if (wid) localStorage.setItem("admin_website_id", String(wid));
+  el.loginError.textContent = "";
 }
 
 async function logout() {
   await api("/auth/logout", { method: "POST", body: JSON.stringify({}) }).catch(() => null);
-  state.token = "";
-  state.currentUser = null;
-  localStorage.removeItem("admin_token");
-  localStorage.removeItem("admin_user");
-  localStorage.removeItem("admin_website_id");
+  clearSession();
   location.reload();
 }
 
@@ -837,11 +884,12 @@ el.loginForm.addEventListener("submit", async (e) => {
 el.logoutBtn.addEventListener("click", logout);
 
 (async function init() {
+  syncTokenFromStorage();
   if (!state.token) return;
   try {
-    await api(withWebsiteQuery("/products?limit=1&page=1"));
+    await api("/admins?limit=1");
     await enterDashboard();
   } catch {
-    localStorage.removeItem("admin_token");
+    clearSession();
   }
 })();

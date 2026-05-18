@@ -119,21 +119,22 @@
     if (!pid) return;
 
     let existing = [];
-    try {
-      const data = await apiFn(`/product-variants?product_id=${pid}`);
-      existing = listVariantItems(data);
-    } catch {
-      existing = [];
-    }
+    const data = await apiFn(`/product-variants?product_id=${pid}`);
+    existing = listVariantItems(data);
 
     for (const row of existing) {
       const id = field(row, "id", "Id");
-      if (id) await apiFn(`/product-variants/${id}`, { method: "DELETE" });
+      if (id) {
+        await apiFn(`/product-variants/${id}`, { method: "DELETE" });
+      }
     }
 
     for (const v of variants) {
       const name = String(v.name || "").trim();
       if (!name) continue;
+      const sku =
+        v.sku ||
+        `p${pid}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
       await apiFn("/product-variants", {
         method: "POST",
         body: JSON.stringify({
@@ -141,7 +142,7 @@
           name,
           price: Number(v.price) || 0,
           stock: Number(v.stock) ?? 0,
-          sku: v.sku || null,
+          sku,
           status: "active"
         })
       });
