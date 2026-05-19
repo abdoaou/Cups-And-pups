@@ -519,6 +519,10 @@ article.product-card.product-surface--added {
   object-fit: cover;
 }
 
+.product-card--no-image .product-body {
+  padding-top: 1rem;
+}
+
 .product-body {
   padding: 0.8rem;
 }

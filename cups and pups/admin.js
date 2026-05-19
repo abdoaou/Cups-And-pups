@@ -3,6 +3,7 @@ const state = {
   currentUser: JSON.parse(localStorage.getItem("admin_user") || "null"),
   products: [],
   categories: [],
+  parentCategories: [],
   productPage: 1,
   productPageSize: 10,
   productTotal: 0,
@@ -32,6 +33,8 @@ function defaultApiBaseUrl() {
 const API_BASE_URL = (window.API_BASE_URL || localStorage.getItem("petcafe_api_base") || defaultApiBaseUrl()).replace(/\/$/, "");
 const API_PREFIX = (window.API_PREFIX || localStorage.getItem("petcafe_api_prefix") || "/api/v1").replace(/\/$/, "");
 const WEBSITE_ID = Number(window.WEBSITE_ID || localStorage.getItem("petcafe_website_id") || 1);
+const MENU_PARENT_CATEGORY_ID = Number(window.MENU_PARENT_CATEGORY_ID || 2);
+const PETS_PARENT_CATEGORY_ID = Number(window.PETS_PARENT_CATEGORY_ID || 3);
 
 const el = {
   loginView: document.getElementById("loginView"),
@@ -102,6 +105,17 @@ function mediaUrl(value) {
   if (/^(https?:)?\/\//i.test(raw) || raw.startsWith("data:")) return raw;
   if (raw.startsWith("/")) return `${API_BASE_URL}${raw}`;
   return raw;
+}
+
+/** Trim form text; always include in JSON. */
+function formOptionalField(id) {
+  return String(document.getElementById(id)?.value ?? "").trim();
+}
+
+/** API clears image when body has "image": "" or null; omitting image keeps the existing URL. */
+function formImageField(id) {
+  const value = formOptionalField(id);
+  return value === "" ? "" : value;
 }
 
 function fmtDate(value) {
@@ -203,6 +217,20 @@ function normalizeCategory(row) {
   };
 }
 
+function normalizeParentCategory(row) {
+  const statusRaw = field(row, "status", "Status");
+  const active = statusRaw === true || statusRaw === "active" || statusRaw === 1;
+  return {
+    id: field(row, "id", "Id"),
+    name: field(row, "name", "Name") || "",
+    slug: field(row, "slug", "Slug") || "",
+    description: field(row, "description", "Description") || "",
+    image: mediaUrl(field(row, "image", "Image")),
+    websiteId: field(row, "website_id", "websiteId", "WebsiteId"),
+    status: active ? "active" : "inactive"
+  };
+}
+
 function normalizeVariantRow(v) {
   if (window.ProductVariants) return window.ProductVariants.normalizeVariantFromRow(v);
   const name = String(field(v, "name", "Name") || "").trim();
@@ -241,21 +269,18 @@ function normalizeProduct(row) {
 }
 
 function categoryNameById(id) {
+  const parent = state.parentCategories.find((p) => String(p.id) === String(id));
+  if (parent) return parent.name;
   const cat = state.categories.find((c) => String(c.id) === String(id));
   return cat?.name || (id ? `#${id}` : "—");
 }
 
-function isParentCategory(cat) {
-  return cat.parentId === null || cat.parentId === undefined || cat.parentId === "";
+function parentCategories() {
+  return state.parentCategories;
 }
 
 function childCategories() {
   return state.categories.filter((c) => c.parentId != null && c.parentId !== "");
-}
-
-function parentCategories() {
-  const idsUsedAsParent = new Set(childCategories().map((c) => Number(c.parentId)));
-  return state.categories.filter((c) => isParentCategory(c) || idsUsedAsParent.has(Number(c.id)));
 }
 
 function formatVariantSummary(product) {
@@ -342,10 +367,17 @@ async function loadCategoriesData() {
   return state.categories;
 }
 
+async function loadParentCategoriesData() {
+  const data = await api(withWebsiteQuery("/parent-categories?limit=100"));
+  state.parentCategories = listItems(data).map(normalizeParentCategory);
+  return state.parentCategories;
+}
+
 async function loadDashboard() {
   const [productData] = await Promise.all([
     api(withWebsiteQuery("/products?page=1&limit=5")),
-    loadCategoriesData().catch(() => [])
+    loadCategoriesData().catch(() => []),
+    loadParentCategoriesData().catch(() => [])
   ]);
 
   const items = listItems(productData).map(normalizeProduct);
@@ -482,7 +514,11 @@ function productFormHtml(product = null) {
       <label class="field-label">SKU</label>
       <input id="fSku" value="${escapeHtml(p.sku || "")}" />
       <label class="field-label">Image URL</label>
-      <input id="fImage" value="${escapeHtml(p.image || "")}" placeholder="https://..." />
+      <div class="image-url-row">
+        <input id="fImage" value="${escapeHtml(p.image || "")}" placeholder="https://..." />
+        <button type="button" class="btn-secondary btn-sm" id="clearProductImage">Clear image</button>
+      </div>
+      <p class="muted form-hint">Leave empty and save to remove the image (sends image as empty string to the API).</p>
       <label class="field-label">Status</label>
       <select id="fStatus">
         <option value="active" ${p.status === "active" ? "selected" : ""}>active</option>
@@ -509,6 +545,10 @@ function bindProductFormControls() {
         { name: "Large", price: 0, stock: 50, sku: "" }
       ]);
     }
+  });
+  document.getElementById("clearProductImage")?.addEventListener("click", () => {
+    const input = document.getElementById("fImage");
+    if (input) input.value = "";
   });
   bindVariantRowControls();
 }
@@ -549,8 +589,8 @@ function buildProductPayload() {
     category_id: Number(document.getElementById("fCategory").value || 0) || null,
     price: basePrice,
     stock: Number(document.getElementById("fStock").value || 0),
-    sku: document.getElementById("fSku").value.trim() || undefined,
-    image: document.getElementById("fImage").value.trim() || undefined,
+    sku: formOptionalField("fSku") || null,
+    image: formImageField("fImage"),
     status: document.getElementById("fStatus").value,
     featured: document.getElementById("fFeatured").checked
   };
@@ -740,7 +780,7 @@ function parentCategoryFormHtml(category = null) {
   const c = category || {};
   return `
     <div class="form-grid">
-      <p class="muted">Top-level menus (Coffee id 2, Pet shop id 3). Subcategories link to these.</p>
+      <p class="muted">Top-level menus from your <strong>parent_categories</strong> table (e.g. Coffee, Pet Shop).</p>
       <label class="field-label">Name</label>
       <input id="cName" value="${escapeHtml(c.name || "")}" required />
       <label class="field-label">Slug</label>
@@ -787,15 +827,25 @@ function categoryFormHtml(category = null) {
     </div>`;
 }
 
-function buildCategoryPayload(parentIdRequired) {
+function buildParentCategoryPayload() {
+  const name = document.getElementById("cName").value.trim();
+  if (!name) throw new Error("Parent category name is required");
+  return {
+    website_id: websiteIdOf(),
+    name,
+    slug:
+      document.getElementById("cSlug").value.trim() || name.toLowerCase().replace(/\s+/g, "-"),
+    description: document.getElementById("cDesc").value.trim(),
+    image: formOptionalField("cImage"),
+    status: document.getElementById("cStatus").value
+  };
+}
+
+function buildCategoryPayload() {
   const name = document.getElementById("cName").value.trim();
   if (!name) throw new Error("Category name is required");
-  const parentVal = document.getElementById("cParent")?.value;
-  const parent_id =
-    parentIdRequired === false
-      ? null
-      : Number(parentVal || 0) || null;
-  if (parentIdRequired && !parent_id) {
+  const parent_id = Number(document.getElementById("cParent")?.value || 0) || null;
+  if (!parent_id) {
     throw new Error("Select a parent menu (Coffee or Pet shop).");
   }
   return {
@@ -803,19 +853,19 @@ function buildCategoryPayload(parentIdRequired) {
     slug: document.getElementById("cSlug").value.trim() || name.toLowerCase().replace(/\s+/g, "-"),
     description: document.getElementById("cDesc").value.trim(),
     parent_id,
-    image: document.getElementById("cImage").value.trim() || undefined,
+    image: formOptionalField("cImage"),
     status: document.getElementById("cStatus").value
   };
 }
 
 function openParentCategoryModal(category = null) {
   openModal(category ? "Edit parent category" : "New parent category", parentCategoryFormHtml(category), async () => {
-    const payload = buildCategoryPayload(false);
+    const payload = buildParentCategoryPayload();
     if (category?.id) {
-      await api(`/categories/${category.id}`, { method: "PUT", body: JSON.stringify(payload) });
+      await api(`/parent-categories/${category.id}`, { method: "PUT", body: JSON.stringify(payload) });
       showToast("Parent category updated", "success");
     } else {
-      await api("/categories", { method: "POST", body: JSON.stringify(payload) });
+      await api("/parent-categories", { method: "POST", body: JSON.stringify(payload) });
       showToast("Parent category created", "success");
     }
     await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
@@ -824,7 +874,7 @@ function openParentCategoryModal(category = null) {
 
 function openCategoryModal(category = null) {
   openModal(category ? "Edit subcategory" : "New subcategory", categoryFormHtml(category), async () => {
-    const payload = buildCategoryPayload(true);
+    const payload = buildCategoryPayload();
     if (category?.id) {
       await api(`/categories/${category.id}`, { method: "PUT", body: JSON.stringify(payload) });
       showToast("Subcategory updated", "success");
@@ -837,11 +887,13 @@ function openCategoryModal(category = null) {
 }
 
 async function loadParentCategories() {
-  await loadCategoriesData().catch(() => {});
+  await loadParentCategoriesData().catch(() => {
+    state.parentCategories = [];
+  });
   const parents = parentCategories();
   el.parentCategoriesTab.innerHTML = `
     <div class="toolbar">
-      <p class="muted toolbar-hint">Parent id <strong>2</strong> = Coffee menu · <strong>3</strong> = Pet shop</p>
+      <p class="muted toolbar-hint">From <strong>parent_categories</strong> table · Coffee #${MENU_PARENT_CATEGORY_ID} (${escapeHtml(categoryNameById(MENU_PARENT_CATEGORY_ID))}) · Pet shop #${PETS_PARENT_CATEGORY_ID} (${escapeHtml(categoryNameById(PETS_PARENT_CATEGORY_ID))})</p>
       <button type="button" id="newParentCategoryBtn" class="btn-primary">+ New parent category</button>
     </div>
     <div class="table-wrap">
@@ -880,7 +932,7 @@ async function loadParentCategories() {
   document.getElementById("newParentCategoryBtn")?.addEventListener("click", () => openParentCategoryModal());
   document.querySelectorAll("[data-edit-parent-category]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const cat = state.categories.find((c) => String(c.id) === btn.dataset.editParentCategory);
+      const cat = state.parentCategories.find((c) => String(c.id) === btn.dataset.editParentCategory);
       openParentCategoryModal(cat);
     });
   });
@@ -888,7 +940,7 @@ async function loadParentCategories() {
     btn.addEventListener("click", async () => {
       if (!confirm("Delete this parent category? Subcategories may break.")) return;
       try {
-        await api(`/categories/${btn.dataset.deleteParentCategory}`, { method: "DELETE" });
+        await api(`/parent-categories/${btn.dataset.deleteParentCategory}`, { method: "DELETE" });
         showToast("Parent category deleted", "success");
         await Promise.all([loadParentCategories(), loadCategories(), loadDashboard()]);
       } catch (err) {
@@ -899,7 +951,7 @@ async function loadParentCategories() {
 }
 
 async function loadCategories() {
-  await loadCategoriesData();
+  await Promise.all([loadCategoriesData(), loadParentCategoriesData().catch(() => {})]);
   el.categoriesTab.innerHTML = `
     <div class="toolbar">
       <p class="muted toolbar-hint">Subcategories under a parent (e.g. Hot Coffee → parent Coffee #2)</p>

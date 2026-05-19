@@ -192,9 +192,7 @@ function normalizeApiProduct(item) {
       (variants.length ? variants.every((v) => v.soldOut) : stock <= 0),
     likes: Number(apiField(item, "likes", "Likes") || 0),
     views: Number(apiField(item, "views", "Views", "view_count", "ViewCount") || 0),
-    image:
-      mediaUrl(apiField(item, "image", "Image", "imageUrl", "ImageUrl", "image_url")) ||
-      "https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?auto=format&fit=crop&w=800&q=80"
+    image: mediaUrl(apiField(item, "image", "Image", "imageUrl", "ImageUrl", "image_url"))
   };
 }
 
@@ -650,12 +648,13 @@ function filteredProducts(type, category) {
 
 function productCard(item, options = { wishlist: false }) {
   const soldOut = isProductSoldOut(item);
+  const hasImage = Boolean(item.image);
   const wrapper = document.createElement("article");
-  wrapper.className = `product-card${soldOut ? " sold-out" : ""}`;
+  wrapper.className = `product-card${hasImage ? "" : " product-card--no-image"}${soldOut ? " sold-out" : ""}`;
   const miniMark = item.type === "coffee" ? "☕ 🫘" : "🐾";
   ensureSelectedVariant(item);
   wrapper.innerHTML = `
-    <img src="${item.image}" alt="${escapeHtml(item.name)}" />
+    ${hasImage ? `<img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" loading="lazy" />` : ""}
     <div class="product-body">
       <div class="product-title-row">
         <h3>${escapeHtml(item.name)}</h3>
@@ -723,8 +722,17 @@ function renderPets() {
 function openProductModal(item) {
   ensureSelectedVariant(item);
 
-  els.modalImage.src = item.image;
-  els.modalImage.alt = item.name;
+  if (els.modalImage) {
+    if (item.image) {
+      els.modalImage.src = item.image;
+      els.modalImage.alt = item.name;
+      els.modalImage.style.display = "block";
+    } else {
+      els.modalImage.removeAttribute("src");
+      els.modalImage.alt = "";
+      els.modalImage.style.display = "none";
+    }
+  }
   els.modalName.textContent = item.name;
   els.modalDescription.textContent =
     item.description ||
